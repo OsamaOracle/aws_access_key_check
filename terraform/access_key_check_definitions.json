@@ -1,0 +1,78 @@
+{
+  "StartAt": "Check Trusted Advisor Results",
+  "States": {
+    "Check Trusted Advisor Results": {
+      "Type": "Task",
+      "Resource": "${results_check_arn}",
+      "Next": "Any violations?",
+      "ResultPath": "$.violations"
+    },
+    "Any violations?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.violations.check",
+          "BooleanEquals": true,
+          "Next": "Yes"
+        },
+        {
+          "Variable": "$.violations.check",
+          "BooleanEquals": false,
+          "Next": "No"
+        }
+      ],
+      "Default": "Yes"
+    },
+    "Yes": {
+      "Type": "Map",
+      "ItemsPath": "$.violations.users",
+      "Parameters": {
+        "username.$": "$$.Map.Item.Value"
+      },
+      "Iterator": {
+        "StartAt": "Check key age",
+        "States": {
+          "Check key age": {
+            "Type": "Task",
+            "Resource": "${check_key_age_arn}",
+            "ResultPath": "$.check",
+            "Next": "Key older than 120 days?"
+          },
+          "Key older than 120 days?": {
+            "Type": "Choice",
+            "Choices": [
+              {
+                "Variable": "$.check.deactivate",
+                "BooleanEquals": true,
+                "Next": "Deactivate key"
+              },
+              {
+                "Variable": "$.check.deactivate",
+                "BooleanEquals": false,
+                "Next": "Notify user"
+              }
+            ],
+            "Default": "Notify user"
+          },
+          "Deactivate key": {
+            "Type": "Task",
+            "Resource": "${deactivate_key_arn}",
+            "ResultPath": "$.deactivate",
+            "Next": "Notify user"
+          },
+          "Notify user": {
+            "Type": "Task",
+            "Resource": "${notify_user_arn}",
+            "ResultPath": "$.notify",
+            "End": true
+          }
+        }
+      },
+      "End": true
+    },
+    "No": {
+      "Type": "Pass",
+      "End": true
+    }
+  }
+}
